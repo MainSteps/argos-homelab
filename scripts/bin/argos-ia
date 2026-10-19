@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# argos-ia [-m modelo] "<instruccion>" [archivo]
+set -uo pipefail
+MODEL="qwen3:4b"; STATUS=/var/lib/argos/ia-status; OUT=/opt/argos-data/ia/resultados
+MD=/opt/argos-ia/venv/bin/markitdown
+while getopts "m:" o; do case $o in m) MODEL="$OPTARG";; *) exit 2;; esac; done; shift $((OPTIND-1))
+[ $# -ge 1 ] || { echo "uso: argos-ia [-m modelo] \"<instruccion>\" [archivo]" >&2; exit 2; }
+INSTR="$1"; FILE="${2:-}"; START=$(date +%s)
+fail(){ echo "FAIL $(date '+%F %T') modelo=$MODEL seg=$(( $(date +%s)-START )) $1" | sudo tee "$STATUS" >/dev/null; echo "ERROR: $1" >&2; exit 1; }
+TEXT=""
+if [ -n "$FILE" ]; then
+  [ -r "$FILE" ] || fail "no se puede leer $FILE"
+  case "${FILE,,}" in
+    *.pdf) TEXT=$(pdftotext -layout "$FILE" - 2>/dev/null) || fail "pdftotext";;
+    *.pptx|*.docx|*.xlsx|*.ppt|*.doc|*.xls) TEXT=$("$MD" "$FILE" 2>/dev/null) || fail "markitdown";;
+    *) TEXT=$(cat "$FILE");;
+  esac
+fi
+PROMPT="$INSTR"; [ -n "$TEXT" ] && PROMPT="$INSTR"$'\n\n---\n'"$TEXT"
+case "$MODEL" in *8b*) echo "modelo 8b bloqueado (demasiado lento en esta CPU)" >&2; exit 3;; esac
+# qwen3:4b (2507) ignora think:false y /no_think: se manda think:false igual, mas mensaje de
+# sistema, respuesta pre-iniciada y stop en <think>; ultimo recurso: limpiar bloques <think>.
+SYS="Responde en el idioma de la instruccion, directo y sin mostrar tu razonamiento."
+REQ=$(jq -n --arg m "$MODEL" --arg p "$PROMPT" --arg s "$SYS" '{model:$m,messages:[{role:"system",content:$s},{role:"user",content:$p},{role:"assistant",content:"Respuesta:"}],stream:false,think:false,options:{num_thread:(env.ARGOS_IA_THREADS // "12" | tonumber),stop:["<think>","</think>"]}}')
+RESP=$(curl -sS --max-time 1800 http://127.0.0.1:11434/api/chat -d "$REQ") || fail "API Ollama no responde"
+ANS=$(jq -r '.message.content // empty' <<<"$RESP" | perl -0pe 's{<think>.*?(</think>|\z)}{}gs; s{^.*?</think>}{}s; s{^\s+|\s+\z}{}g'); [ -n "$ANS" ] || fail "respuesta vacia: $(jq -r '.error // "?"' <<<"$RESP")"
+TPS=$(jq -r 'if .eval_duration>0 then (.eval_count/(.eval_duration/1e9)*100|round/100) else 0 end' <<<"$RESP")
+SLUG=$(echo "$INSTR" | iconv -t ascii//TRANSLIT 2>/dev/null | tr -cs 'A-Za-z0-9' '-' | tr A-Z a-z | cut -c1-40 | sed 's/^-//;s/-$//')
+F="$OUT/$(date +%Y%m%d-%H%M%S)-${SLUG:-tarea}.md"
+{ echo "<!-- modelo=$MODEL archivo=${FILE:-ninguno} tok/s=$TPS -->"; echo "$ANS"; } > "$F"
+sync "$F"; SEC=$(( $(date +%s)-START ))
+echo "OK $(date '+%F %T') modelo=$MODEL seg=$SEC tok/s=$TPS" | sudo tee "$STATUS" >/dev/null
+echo "$F"; echo "$ANS"
+[ -n "${ARGOS_IA_STATS:-}" ] && jq -c '{eval_count,eval_duration,prompt_eval_count,prompt_eval_duration,total_duration,load_duration}' <<<"$RESP" > "$ARGOS_IA_STATS"
+exit 0

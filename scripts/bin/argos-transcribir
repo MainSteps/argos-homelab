@@ -1,0 +1,164 @@
+#!/opt/argos-transcribir/venv/bin/python
+"""argos-transcribir: transcribe grabaciones de clase con faster-whisper (CPU, int8) y escribe una nota en la boveda.
+Fuente: copia local del puente  /opt/argos-data/puente/Universidad/<SEMESTRE>/<CURSO>/Grabaciones/<audio>
+Destino: <RUTA_BOVEDA>/Ramos/<Ramo>/Clases/Clase AAAA-MM-DD HHMM - <Ramo>.md
+Nunca borra ni mueve el audio original (queda en Drive). Estado por sha256 en /opt/argos-data/transcribir/hechos.json.
+Uso: argos-transcribir [--archivo RUTA --ramo "Ramo de ejemplo"]   (sin argumentos: procesa lo nuevo)"""
+import os, sys, json, time, glob, hashlib, subprocess, fcntl, datetime, re
+import numpy as np
+SRC = os.environ.get("ARGOS_TR_SRC", "/opt/argos-data/puente/Universidad/<SEMESTRE>")
+VAULT = os.environ.get("ARGOS_TR_VAULT", "<RUTA_BOVEDA>/Ramos")
+STATE = "/opt/argos-data/transcribir/hechos.json"
+STATUS = os.environ.get("ARGOS_TR_STATUS", "/var/lib/argos/transcribir-status")
+LOGF = "/var/log/argos/transcribir.log"
+LOCK = "/run/argos-transcribir.lock"
+MODEL = os.environ.get("ARGOS_TR_MODEL", "turbo")          # large-v3-turbo int8; alternativa: small
+THREADS = int(os.environ.get("ARGOS_TR_THREADS", "6"))
+TMAX = int(os.environ.get("ARGOS_TR_TMAX", "82"))           # pausa si la CPU pasa de esto (°C)
+EXTS = {"m4a", "mp3", "ogg", "opus", "wav", "aac", "3gp", "amr", "webm", "flac"}
+CURSOS = {"ABC1234": "Ramo de ejemplo", "XYZ5678": "Otro ramo"}  # EJEMPLO: sigla -> carpeta del ramo
+
+def log(m):
+    print(m, flush=True)
+    try:
+        with open(LOGF, "a") as f: f.write(time.strftime("%Y-%m-%dT%H:%M:%S%z ") + m + "\n")
+    except OSError: pass
+
+def estado(s):
+    try:
+        with open(STATUS, "w") as f: f.write(f"{s.split()[0]} {time.strftime('%Y-%m-%dT%H:%M:%S%z')} {' '.join(s.split()[1:])}\n")
+    except OSError as e: print("aviso status:", e, file=sys.stderr)
+
+def temp():
+    try: return max(int(open(p).read()) for p in glob.glob("/sys/class/thermal/thermal_zone*/temp")) / 1000
+    except Exception: return 0
+
+def sha(p):
+    h = hashlib.sha256()
+    with open(p, "rb") as f:
+        for b in iter(lambda: f.read(1 << 20), b""): h.update(b)
+    return h.hexdigest()
+
+def ia_ocupada():
+    """True si hay trabajo pesado de IA corriendo (argos-ia o el LLM de ollama generando)."""
+    if subprocess.run(["pgrep", "-f", "/usr/local/bin/argos-ia"], capture_output=True).returncode == 0: return True
+    try:  # ollama usando CPU ahora mismo
+        pid = subprocess.run(["pgrep", "-f", "ollama runner"], capture_output=True, text=True).stdout.split()
+        for p in pid:
+            a = open(f"/proc/{p}/stat").read().split(); t1 = int(a[13]) + int(a[14]); time.sleep(1)
+            a = open(f"/proc/{p}/stat").read().split()
+            if int(a[13]) + int(a[14]) - t1 > 20: return True
+    except Exception: pass
+    return False
+
+def fecha_audio(p):
+    r = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format_tags=creation_time:format=duration", "-of", "json", p], capture_output=True, text=True)
+    d = json.loads(r.stdout or "{}").get("format", {})
+    dur = float(d.get("duration", 0) or 0)
+    ct = (d.get("tags") or {}).get("creation_time")
+    try:
+        f = datetime.datetime.fromisoformat(ct.replace("Z", "+00:00")).astimezone() if ct else None
+        if f and f.year < 2020: f = None
+    except Exception: f = None
+    return f or datetime.datetime.fromtimestamp(os.path.getmtime(p)).astimezone(), dur
+
+def hms(s): s = int(s); return f"{s//3600:02d}:{s%3600//60:02d}:{s%60:02d}"
+
+def transcribir(p, ramo, codigo):
+    from faster_whisper import WhisperModel
+    fecha, dur = fecha_audio(p)
+    pcm = subprocess.run(["ffmpeg", "-v", "error", "-nostdin", "-threads", "2", "-i", p, "-ac", "1", "-ar", "16000", "-f", "f32le", "-"], capture_output=True)
+    if pcm.returncode != 0 or not pcm.stdout: raise RuntimeError("ffmpeg no pudo leer el audio: " + pcm.stderr.decode()[-200:])
+    audio = np.frombuffer(pcm.stdout, np.float32); dur = len(audio) / 16000
+    t0 = time.time(); tmax_vista = temp(); pausas = 0
+    w = WhisperModel(MODEL, device="cpu", compute_type="int8", cpu_threads=THREADS, download_root="/opt/argos-transcribir/modelos")
+    segs, info = w.transcribe(audio, language="es", vad_filter=True, vad_parameters={"min_silence_duration_ms": 1000},
+                              beam_size=5, condition_on_previous_text=False)
+    bloques, actual, ini = [], [], 0.0
+    for s in segs:
+        t = temp(); tmax_vista = max(tmax_vista, t)
+        while t >= TMAX:  # proteccion termica (pasta termica seca)
+            pausas += 1; time.sleep(20); t = temp()
+        if not actual: ini = s.start
+        actual.append(s.text.strip())
+        if s.end - ini >= 45: bloques.append((ini, " ".join(actual))); actual = []
+        if len(bloques) % 10 == 0 and actual == []: log(f"  avance {hms(s.end)} / {hms(dur)}  T={t:.0f}°C")
+    if actual: bloques.append((ini, " ".join(actual)))
+    seg = time.time() - t0
+    nombre = f"Clase {fecha:%Y-%m-%d %H%M} - {ramo}"
+    dest = os.path.join(VAULT, ramo, "Clases"); os.makedirs(dest, exist_ok=True)
+    out = os.path.join(dest, nombre + ".md")
+    cuerpo = "\n\n".join(f"**[{hms(a)}]** {t}" for a, t in bloques) or "_(no se detectó voz)_"
+    md = f"""---
+tipo: fuente
+subtipo: transcripcion
+ramo: {codigo}
+fecha_clase: {fecha:%Y-%m-%d}
+hora_inicio: "{fecha:%H:%M}"
+duracion: "{hms(dur)}"
+audio_original: "{os.path.basename(p)}"
+modelo: "faster-whisper {MODEL} int8 (es, VAD)"
+fecha_carga: {datetime.date.today()}
+---
+> ↑ Ramo: [[_{ramo}]]
+
+# Clase {fecha:%d/%m/%Y} - {ramo}
+
+- **Fecha:** {fecha:%d/%m/%Y %H:%M} · **Duración:** {hms(dur)} · **Audio:** `{os.path.basename(p)}` (en Drive, carpeta Grabaciones)
+- **Transcripción automática** (faster-whisper {MODEL}, sin resumen IA). Puede tener errores en nombres, fórmulas y números: verifica con el audio. El resumen lo hace el tutor cuando se lo pidas.
+
+## Transcripción
+
+{cuerpo}
+"""
+    tmp = out + ".tmp"; open(tmp, "w").write(md); os.replace(tmp, out)
+    return out, dur, seg, tmax_vista, pausas
+
+def main():
+    os.makedirs(os.path.dirname(STATE), exist_ok=True)
+    lk = open(LOCK, "a+")
+    try: fcntl.flock(lk, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError: print("ya corriendo"); return
+    hechos = json.load(open(STATE)) if os.path.exists(STATE) else {}
+    if "--archivo" in sys.argv:
+        p = sys.argv[sys.argv.index("--archivo") + 1]; ramo = sys.argv[sys.argv.index("--ramo") + 1]
+        cod = next((c for c, r in CURSOS.items() if r == ramo), "?"); cola = [(p, ramo, cod)]
+    else:
+        cola = []
+        for d in sorted(glob.glob(os.path.join(SRC, "*", "Grabaciones"))):
+            cod = os.path.basename(os.path.dirname(d)).split()[0]
+            if cod not in CURSOS: continue
+            for f in sorted(os.listdir(d)):
+                fp = os.path.join(d, f)
+                if os.path.isfile(fp) and f.rsplit(".", 1)[-1].lower() in EXTS and time.time() - os.path.getmtime(fp) > 120:
+                    cola.append((fp, CURSOS[cod], cod))
+    pend = []
+    for p, r, c in cola:
+        h = sha(p)
+        if h in hechos: continue
+        pend.append((p, r, c, h))
+    if not pend:
+        if not os.path.exists(STATUS) or open(STATUS).read().split()[:1] != ["FAIL"] or "--archivo" in sys.argv:
+            estado(f"OK pendientes=0 hechos={len(hechos)} modelo={MODEL}")
+        return
+    if ia_ocupada():
+        log(f"ESPERA {len(pend)} audio(s): la IA local está ocupada; reintento en la próxima vuelta")
+        estado(f"OK pendientes={len(pend)} hechos={len(hechos)} espera=ia-ocupada"); return
+    err = 0; quedan = 0
+    for i, (p, r, c, h) in enumerate(pend):
+        hora = datetime.datetime.now().hour
+        if "--archivo" not in sys.argv and not os.environ.get("ARGOS_TR_SIN_HORARIO") and 3 <= hora < 12:
+            quedan = len(pend) - i  # no empezar archivos nuevos despues de las 03:00 (backup 03:30); siguen manana
+            log(f"CORTE 03:00: {quedan} audio(s) quedan para la proxima noche"); break
+        log(f"INICIO {os.path.basename(p)} -> {r} (modelo={MODEL} hilos={THREADS})")
+        estado(f"RUNNING transcribiendo={os.path.basename(p)[:40]} pendientes={len(pend)}")
+        try:
+            out, dur, seg, tm, pz = transcribir(p, r, c)
+            hechos[h] = {"archivo": os.path.relpath(p, SRC) if p.startswith(SRC) else p, "nota": out, "fecha": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+                         "duracion_s": round(dur), "seg": round(seg), "rtf": round(seg / max(dur, 1), 2), "tmax": tm}
+            json.dump(hechos, open(STATE + ".tmp", "w"), ensure_ascii=False, indent=1); os.replace(STATE + ".tmp", STATE)
+            log(f"LISTO {os.path.basename(p)} -> {out} audio={hms(dur)} tardó={hms(seg)} RTF={seg/max(dur,1):.2f} Tmax={tm:.0f}°C pausas_termicas={pz}")
+        except Exception as e:
+            err += 1; log(f"ERROR {os.path.basename(p)}: {e}")
+    estado(f"{'FAIL' if err else 'OK'} pendientes={err+quedan} hechos={len(hechos)} modelo={MODEL} errores={err}")
+main()

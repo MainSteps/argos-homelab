@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# argos-md <archivo> : convierte a .md con markitdown (sin IA)
+set -euo pipefail
+[ $# -eq 1 ] && [ -r "$1" ] || { echo "uso: argos-md <archivo>" >&2; exit 2; }
+D=/opt/argos-data/ia/md; mkdir -p "$D"
+B=$(basename "$1"); F="$D/${B%.*}.md"
+/opt/argos-ia/venv/bin/markitdown "$1" > "$F"
+echo "$F"

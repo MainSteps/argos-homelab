@@ -1,0 +1,15 @@
+[Unit]
+Description=ArgOS transcribir: grabaciones de clase (Drive .../Grabaciones) -> notas en la boveda (faster-whisper, CPU)
+Wants=network-online.target
+After=network-online.target
+[Service]
+Type=oneshot
+User=<USUARIO>
+Group=<USUARIO>
+ExecStartPre=+/bin/sh -c 'mkdir -p /var/lib/argos /var/log/argos /opt/argos-data/puente /opt/argos-data/transcribir; touch /run/argos-puente.lock /run/argos-transcribir.lock /var/log/argos-puente.log /var/lib/argos/puente-status /var/lib/argos/transcribir-status /var/log/argos/transcribir.log; chown <USUARIO>:<USUARIO> /run/argos-puente.lock /run/argos-transcribir.lock /var/log/argos-puente.log /var/lib/argos/puente-status /var/lib/argos/transcribir-status /var/log/argos/transcribir.log; chown -R <USUARIO>:<USUARIO> /opt/argos-data/puente /opt/argos-data/transcribir /home/<USUARIO>/.config/rclone; chmod 600 /home/<USUARIO>/.config/rclone/rclone.conf'
+ExecStartPre=/usr/local/bin/argos-puente.sh
+ExecStart=/usr/local/bin/argos-transcribir
+Nice=15
+IOSchedulingClass=idle
+TimeoutStartSec=6h
+Environment=HF_HUB_OFFLINE=1

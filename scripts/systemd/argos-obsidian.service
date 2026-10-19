@@ -1,0 +1,14 @@
+[Unit]
+Description=ArgOS Obsidian Sync continuo (<RUTA_BOVEDA>)
+Wants=network-online.target
+After=network-online.target
+[Service]
+User=<USUARIO>
+ExecStartPre=/bin/sh -c 'mkdir -p /var/lib/argos; true'
+ExecStart=/usr/bin/ob sync --path <RUTA_BOVEDA> --continuous
+ExecStartPost=/bin/sh -c 'echo "RUNNING $(date -Is)" > /var/lib/argos/obsidian-status'
+ExecStopPost=/bin/sh -c 'echo "STOPPED $(date -Is) result=$SERVICE_RESULT" > /var/lib/argos/obsidian-status'
+Restart=always
+RestartSec=30
+[Install]
+WantedBy=multi-user.target

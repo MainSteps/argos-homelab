@@ -1,0 +1,51 @@
+#!/opt/argos-ia/venv/bin/python
+"""argos-buscar "pregunta" [-r ramo|sigla] [-k 5] [--json] [--full]: busqueda hibrida (embeddings bge-m3 + palabras clave FTS5) en la boveda. Salida compacta para pegar a un LLM."""
+import os, sys, json, re, sqlite3, argparse, urllib.request, unicodedata
+import numpy as np
+DB = os.environ.get("ARGOS_BUSQUEDA_DB", "/opt/argos-data/busqueda/index.db")
+MODEL = os.environ.get("ARGOS_EMBED_MODEL", "bge-m3")
+ap = argparse.ArgumentParser(); ap.add_argument("q"); ap.add_argument("-r", "--ramo"); ap.add_argument("-k", type=int, default=5)
+ap.add_argument("--json", action="store_true"); ap.add_argument("--full", action="store_true", help="texto completo del fragmento (por defecto se recorta a ~700 caracteres)")
+ap.add_argument("--sin-material", action="store_true", help="excluir notas crudas de Material/")
+a = ap.parse_args()
+def norm(s): return "".join(c for c in unicodedata.normalize("NFD", s.lower()) if unicodedata.category(c) != "Mn")
+db = sqlite3.connect(DB)
+where, args = "1=1", []
+if a.ramo:
+    r = norm(a.ramo); rows = db.execute("select distinct ramo, carpeta from chunks").fetchall()
+    ok = [c for s, c in rows if c and (norm(s) == r or r in norm(c))]
+    if not ok: sys.exit(f"ramo no encontrado: {a.ramo}. Opciones: " + ", ".join(sorted({f'{s} ({c})' for s, c in rows if c})))
+    where = "carpeta in (%s)" % ",".join("?" * len(set(ok))); args = list(set(ok))
+if a.sin_material: where += " and tipo != 'material'"
+rows = db.execute(f"select id, path, heading, ramo, tipo, text, vec from chunks where {where}", args).fetchall()
+if not rows: sys.exit("indice vacio: ejecuta argos-indexar")
+req = urllib.request.Request("http://127.0.0.1:11434/api/embed", json.dumps({"model": MODEL, "input": [a.q], "keep_alive": "2m"}).encode(), {"Content-Type": "application/json"})
+q = np.array(json.load(urllib.request.urlopen(req, timeout=300))["embeddings"][0], dtype=np.float32); q /= np.linalg.norm(q)
+M = np.frombuffer(b"".join(r[6] for r in rows), dtype=np.float32).reshape(len(rows), -1)
+cos = M @ q
+sem_rank = {rows[i][0]: n for n, i in enumerate(np.argsort(-cos))}
+STOP = set("que como cual cuando donde para por con los las del una uno unos unas sobre entre esta este eso the and how what when funciona usa usar ramo taller curso".split())
+terms = [t for t in re.findall(r"\w+", norm(a.q)) if len(t) > 2 and t not in STOP]
+kw_rank = {}
+if terms:
+    ids = {r[0] for r in rows}
+    try:
+        res = db.execute("select rowid from fts where fts match ? order by rank limit 200", (" OR ".join(f'"{t}"' for t in terms),)).fetchall()
+        kw_rank = {rid: n for n, (rid,) in enumerate([x for x in res if x[0] in ids])}
+    except sqlite3.OperationalError: pass
+# Reciprocal Rank Fusion (semantica pesa mas)
+byid = {r[0]: (r, float(cos[i])) for i, r in enumerate(rows)}
+# hibrido: similitud coseno + bono pequeño si coincide por palabras clave (top 30 BM25)
+score = {i: byid[i][1] + (0.06 * (1 - kw_rank[i] / 30) if kw_rank.get(i, 99) < 30 else 0) for i in byid}
+top = sorted(score, key=lambda i: -score[i])[:a.k]
+out = []
+for i in top:
+    r, c = byid[i]; t = r[5].strip()
+    if not a.full and len(t) > 700: t = t[:700].rsplit(" ", 1)[0] + " […]"
+    out.append({"ruta": r[1], "titulo": r[2], "ramo": r[3], "tipo": r[4], "similitud": round(c, 3), "palabra_clave": i in kw_rank, "texto": t})
+aviso = out and out[0]["similitud"] < 0.45
+if a.json: print(json.dumps(out, ensure_ascii=False, indent=1))
+else:
+    if aviso: print("aviso: similitud baja; probablemente el tema no está en la bóveda (no inventar).\n")
+    for n, o in enumerate(out, 1):
+        print(f"[{n}] {o['ruta']} › {o['titulo']}  (sim {o['similitud']}{', kw' if o['palabra_clave'] else ''}{', crudo' if o['tipo']=='material' else ''})\n{o['texto']}\n")

@@ -1,0 +1,9 @@
+[Unit]
+Description=ArgOS restic backup
+Wants=network-online.target
+After=network-online.target
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/argos-backup.sh
+Nice=10
+IOSchedulingClass=idle

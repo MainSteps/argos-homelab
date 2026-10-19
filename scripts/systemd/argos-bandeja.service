@@ -1,0 +1,12 @@
+[Unit]
+Description=ArgOS bandeja: ordena '00 Bandeja' de Drive (modo real, nunca borra)
+Wants=network-online.target ollama.service
+After=network-online.target
+[Service]
+Type=oneshot
+User=<USUARIO>
+Group=<USUARIO>
+ExecStartPre=+/bin/sh -c 'mkdir -p /var/lib/argos /var/log/argos /opt/argos-data/puente; touch /run/argos-puente.lock /var/log/argos-puente.log /var/lib/argos/puente-status /var/lib/argos/bandeja-status /var/log/argos/bandeja.log; chown <USUARIO>:<USUARIO> /run/argos-puente.lock /var/log/argos-puente.log /var/lib/argos/puente-status /var/lib/argos/bandeja-status /var/log/argos/bandeja.log; chown -R <USUARIO>:<USUARIO> /opt/argos-data/puente /home/<USUARIO>/.config/rclone; chmod 600 /home/<USUARIO>/.config/rclone/rclone.conf'
+ExecStartPre=/usr/local/bin/argos-puente.sh
+ExecStart=/usr/local/bin/argos-bandeja --aplicar
+Nice=10

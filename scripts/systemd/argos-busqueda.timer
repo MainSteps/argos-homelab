@@ -1,0 +1,7 @@
+[Unit]
+Description=Indexar boveda cada hora (:35, despues de argos-estudio :25)
+[Timer]
+OnCalendar=*-*-* *:35:00
+Persistent=true
+[Install]
+WantedBy=timers.target

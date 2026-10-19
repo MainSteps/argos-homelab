@@ -1,0 +1,9 @@
+[Unit]
+Description=ArgOS busqueda: mapa + indice semantico de la boveda
+After=ollama.service
+[Service]
+Type=oneshot
+User=<USUARIO>
+Nice=10
+ExecStartPre=/usr/local/bin/argos-mapa
+ExecStart=/usr/local/bin/argos-indexar

@@ -1,0 +1,38 @@
+#!/usr/bin/env python3
+"""argos-estado: tabla determinista de /var/lib/argos/*-status (sin IA).
+Filas INFO (informativas) no cuentan como alerta: powercap."""
+import os, glob, re, time, datetime
+D = os.environ.get("ARGOS_STATUS_DIR", "/var/lib/argos")
+R, G, Y, N = "\033[31m", "\033[32m", "\033[36m", "\033[0m"
+if not os.isatty(1): R = G = Y = N = ""
+INFO = {"powercap"}  # informativo, no alerta por contenido
+EDAD_MAX = {"transcribir": 30}  # horas; corre 1 vez por noche (default 24)
+
+def leer(srv):
+    p = os.path.join(D, srv + "-status")
+    return open(p).read().strip() if os.path.exists(p) else ""
+
+alertas = []; rows = []
+for p in sorted(glob.glob(os.path.join(D, "*-status"))):
+    srv = os.path.basename(p)[:-7]
+    txt = open(p).read().strip()
+    first = txt.splitlines()[0] if txt else ""
+    m = re.search(r"\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}", txt)
+    ts = datetime.datetime.fromisoformat(m.group(0).replace(" ", "T")).timestamp() if m else os.path.getmtime(p)
+    edad = (time.time() - ts) / 3600
+    estado = first.split()[0] if first else "VACIO"
+    det = " ".join(txt.split())[:60]
+    info = srv in INFO
+    if re.match(r"\d{4}-\d{2}-\d{2}", estado): estado = "INFO" if info else "OK"  # linea parte con fecha (powercap)
+    if info: estado = "INFO"
+    mal = not info and (estado not in ("OK", "RUNNING", "UP") or edad > EDAD_MAX.get(srv, 24))
+    if mal: alertas.append(f"{srv} {estado}" + (f" ({edad:.0f}h)" if edad > EDAD_MAX.get(srv, 24) else ""))
+    color = R if mal else (Y if info else G)
+    rows.append(f"{color}{srv:10} {estado:8} {edad:6.1f}h  {det[:90]}{N}")
+ESPERADOS = ["bandeja", "busqueda", "estudio", "ia", "transcribir"]
+for srv in ESPERADOS:
+    if not os.path.exists(os.path.join(D, srv + "-status")):
+        alertas.append(f"{srv} FALTA"); rows.append(f"{R}{srv:10} {'FALTA':8} {'-':>7}  sin archivo de estado{N}")
+print(f"{'SERVICIO':10} {'ESTADO':8} {'EDAD':>7}  DETALLE")
+print("\n".join(rows))
+print(f"\n{'Todo OK' if not alertas else str(len(alertas))+' alertas: '+', '.join(alertas)}")

@@ -1,0 +1,124 @@
+#!/usr/bin/env python3
+"""argos-estudio: convierte material de Universidad (copia del puente) a notas .md en la boveda Obsidian. Sin IA. Idempotente; nunca sobrescribe notas editadas por el usuario."""
+import os, sys, json, time, hashlib, shutil, subprocess, unicodedata
+SRC = os.environ.get("ARGOS_ESTUDIO_SRC", "/opt/argos-data/puente/Universidad/<SEMESTRE>")
+VAULT = os.environ.get("ARGOS_ESTUDIO_VAULT", "<RUTA_BOVEDA>/Ramos")
+INDEX = os.environ.get("ARGOS_ESTUDIO_INDEX", "/opt/argos-data/estudio/index.json")
+STATUS = "/var/lib/argos/estudio-status"
+LOGF = "/var/log/argos/estudio.log"
+MD = "/opt/argos-ia/venv/bin/markitdown"
+EXTS = {"pdf", "docx", "pptx", "xlsx"}
+MAPA = {"ABC1234": "Ramo de ejemplo", "XYZ5678": "Otro ramo"}  # EJEMPLO: sigla -> carpeta del ramo
+SIN = "_Sin clasificar"
+
+def log(m):
+    print(m)
+    try:
+        with open(LOGF, "a") as f: f.write(time.strftime("%Y-%m-%dT%H:%M:%S%z ") + m + "\n")
+    except OSError: pass
+
+def sha(b): return hashlib.sha256(b).hexdigest()
+def fsha(p):
+    h = hashlib.sha256()
+    with open(p, "rb") as f:
+        for c in iter(lambda: f.read(1 << 20), b""): h.update(c)
+    return h.hexdigest()
+
+def carpeta_curso(curso):
+    cod = curso.split()[0].upper()
+    if cod in MAPA and os.path.isdir(os.path.join(VAULT, MAPA[cod])): return MAPA[cod]
+    return SIN
+
+OCR_OK = bool(shutil.which("tesseract") and shutil.which("pdftoppm"))
+def convertir(p, ext):
+    """devuelve (texto, ocr_pendiente, metodo)"""
+    if ext == "pdf":
+        t = subprocess.run(["pdftotext", "-layout", p, "-"], capture_output=True, text=True, timeout=120).stdout
+        if len("".join(t.split())) >= 50: return t, False, "texto"
+        if OCR_OK:
+            import tempfile, glob
+            with tempfile.TemporaryDirectory() as d:
+                subprocess.run(["pdftoppm", "-r", "200", "-png", p, f"{d}/pg"], timeout=600)
+                out = []
+                for img in sorted(glob.glob(f"{d}/pg*.png")):
+                    out.append(subprocess.run(["tesseract", img, "-", "-l", "spa+eng"], capture_output=True, text=True, timeout=300).stdout)
+                t = "\n\n".join(f"<!-- pagina {i+1} -->\n{x.strip()}" for i, x in enumerate(out))
+                if len("".join(t.split())) >= 50: return t, False, "ocr"
+        return "", True, "ninguno"
+    r = subprocess.run([MD, p], capture_output=True, text=True, timeout=300)
+    if r.returncode != 0: raise RuntimeError(r.stderr.strip()[-200:])
+    return r.stdout, False, "markitdown"
+
+FCACHE = os.environ.get("ARGOS_ESTUDIO_FCACHE", "/opt/argos-data/estudio/fuentes-sha.json")
+def fuentes_boveda():
+    """sha256 -> ruta de originales ya importados a mano en la boveda (carpetas Fuentes/). Cache por tamano+mtime."""
+    try: cache = json.load(open(FCACHE))
+    except Exception: cache = {}
+    nuevo, out = {}, {}
+    for root, _, files in os.walk(VAULT):
+        if "Fuentes" not in root.split(os.sep): continue
+        for fn in files:
+            p = os.path.join(root, fn)
+            try: st = os.stat(p)
+            except OSError: continue
+            k = f"{st.st_size}:{int(st.st_mtime)}"
+            c = cache.get(p)
+            h = c["sha"] if c and c.get("k") == k else fsha(p)
+            nuevo[p] = {"k": k, "sha": h}; out.setdefault(h, p)
+    try:
+        tmp = FCACHE + ".tmp"; json.dump(nuevo, open(tmp, "w")); os.replace(tmp, FCACHE)
+    except OSError: pass
+    return out
+
+def main():
+    idx = json.load(open(INDEX)) if os.path.exists(INDEX) else {}
+    nuevos = saltados = versionados = errores = en_boveda = 0; ocr = []
+    fb = fuentes_boveda()
+    for root, _, files in os.walk(SRC):
+        for fn in sorted(files):
+            ext = fn.rsplit(".", 1)[-1].lower() if "." in fn else ""
+            if ext not in EXTS or fn.startswith("~$"): continue
+            src = os.path.join(root, fn); rel = os.path.relpath(src, SRC)
+            curso = rel.split(os.sep)[0]
+            try:
+                h = fsha(src); e = idx.get(rel)
+                if e and e.get("src_sha") == h and os.path.exists(e["nota"]) and not (e.get("ocr") and OCR_OK and not e.get("ocr_intentado")):
+                    if e.get("ocr"): ocr.append(rel)
+                    saltados += 1; continue
+                if h in fb and not (e and e.get("src_sha") == h and not e.get("importado")):
+                    # el mismo original ya esta en la boveda (Fuentes/, importado a mano): no duplicar
+                    if not (e and e.get("importado") and e.get("src_sha") == h):
+                        idx[rel] = {"src_sha": h, "nota": fb[h], "importado": True, "ocr": False}
+                        log(f"YA-EN-BOVEDA {rel} -> {fb[h]} (sha256 igual; no se convierte)")
+                    en_boveda += 1; continue
+                texto, pend, metodo = convertir(src, ext)
+                dest_dir = os.path.join(VAULT, carpeta_curso(curso), "Material", *os.path.dirname(os.path.relpath(src, os.path.join(SRC, curso))).split(os.sep)) if os.path.dirname(os.path.relpath(src, os.path.join(SRC, curso))) else os.path.join(VAULT, carpeta_curso(curso), "Material")
+                os.makedirs(dest_dir, exist_ok=True)
+                base = os.path.splitext(fn)[0]
+                fm = (f"---\nfuente: \"Drive/<CARPETA_DRIVE>/Universidad/<SEMESTRE>/{rel}\"\ncurso: \"{curso}\"\n"
+                      f"convertido: {time.strftime('%Y-%m-%dT%H:%M:%S%z')}\ngenerado_por: argos-estudio\ntipo: material\nsrc_sha256: {h}\n"
+                      + ("estado: pendiente OCR\n" if pend else "") + ("ocr: tesseract spa+eng (revisar errores)\n" if metodo == "ocr" else "") + "---\n\n"
+                      + (f"> ↑ Ramo: [[_{carpeta_curso(curso)}]] · Material: [[_Material - {carpeta_curso(curso)}]]\n\n" if carpeta_curso(curso) != SIN else "> ↑ Inicio: [[00 Inicio]] (sin ramo asignado)\n\n"))
+                cuerpo = (f"# {base}\n\n> **Pendiente OCR**: este PDF no tiene capa de texto (escaneado). " + ("El OCR no logró leer texto (imagen borrosa o vacía)." if OCR_OK else "Tesseract no está instalado.") + "\n" if pend else texto)
+                data = (fm + cuerpo).encode()
+                nota = (e or {}).get("nota") or os.path.join(dest_dir, base + ".md")
+                if os.path.exists(nota) and (not e or fsha(nota) != e.get("gen_sha")):
+                    # editada por el usuario o ajena: no se toca, nueva version
+                    n = 2
+                    while os.path.exists(os.path.join(os.path.dirname(nota), f"{base} (v{n}).md")): n += 1
+                    nota = os.path.join(os.path.dirname(nota), f"{base} (v{n}).md"); versionados += 1
+                    log(f"VERSION {rel} -> {nota} (la nota existente fue editada; no se sobrescribe)")
+                with open(nota, "wb") as f: f.write(data)
+                idx[rel] = {"src_sha": h, "nota": nota, "gen_sha": sha(data), "ocr": pend, "ocr_intentado": pend and OCR_OK}
+                nuevos += 1; log(f"{'OCR-PENDIENTE' if pend else ('CONVERTIDO-OCR' if metodo == 'ocr' else 'CONVERTIDO')} {rel} -> {nota}")
+                if pend: ocr.append(rel)
+            except Exception as ex:
+                errores += 1; log(f"ERROR {rel}: {ex}")
+    os.makedirs(os.path.dirname(INDEX), exist_ok=True)
+    tmp = INDEX + ".tmp"; json.dump(idx, open(tmp, "w"), ensure_ascii=False, indent=1); os.replace(tmp, INDEX)
+    st = (f"{'FAIL' if errores else 'OK'} {time.strftime('%Y-%m-%dT%H:%M:%S%z')} nuevos={nuevos} sin_cambios={saltados} "
+          f"versiones={versionados} ya_en_boveda={en_boveda} errores={errores} pendiente_ocr={len(ocr)}\n" + "".join(f"pendiente OCR: {r}\n" for r in ocr))
+    try: open(STATUS, "w").write(st)
+    except OSError as ex: print("aviso status:", ex, file=sys.stderr)
+    print(st.strip())
+main()

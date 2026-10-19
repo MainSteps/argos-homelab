@@ -1,0 +1,18 @@
+# Secretos y configuraciones reales: nunca al repo
+*.env
+!*.env.example
+rclone.conf
+*.key
+*.pem
+secrets/
+# Datos generados
+*.db
+*.sqlite
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.log
+*.bak*
+*.tmp
+.DS_Store

@@ -1,0 +1,9 @@
+[Unit]
+Description=ArgOS estudio: material de Drive -> notas .md en Obsidian (sin IA)
+After=network-online.target
+[Service]
+Type=oneshot
+User=<USUARIO>
+ExecStartPre=+/bin/sh -c 'mkdir -p /var/log/argos /opt/argos-data/estudio; touch /var/lib/argos/estudio-status /var/log/argos/estudio.log; chown <USUARIO>: /var/lib/argos/estudio-status /var/log/argos/estudio.log /opt/argos-data/estudio'
+ExecStart=/usr/local/bin/argos-estudio
+Nice=15

@@ -1,0 +1,167 @@
+#!/usr/bin/env python3
+"""argos-bandeja: propone destino para archivos de '00 Bandeja'. Dry-run por defecto; --aplicar mueve en Drive."""
+import os, sys, re, json, time, subprocess, unicodedata, urllib.request, shutil
+BANDEJA = os.environ.get("ARGOS_BANDEJA", "/opt/argos-data/puente/00 Bandeja")
+REMOTE = "<REMOTO_RCLONE>:<CARPETA_DRIVE>"
+STATUS = "/var/lib/argos/bandeja-status"
+MD = "/opt/argos-ia/venv/bin/markitdown"
+SEM = "Universidad/<SEMESTRE>"
+CURSOS = {  # EJEMPLO: sigla + nombre del ramo -> palabras clave
+ "ABC1234 Ramo de ejemplo": ["abc1234","ramo de ejemplo","tema1","tema2"],
+ "XYZ5678 Otro ramo": ["xyz5678","otro ramo","tema3"],
+}
+OTROS = {"Personal": "Personal", "Redes": "Redes/Material", "Home Lab": "Home Lab"}
+OTROS_KW = {"Personal": ["certificado","boleta"], "Redes": ["subnetting","router"], "Home Lab": ["docker","proxmox"]}
+TIPO = [("Evaluaciones", ["prueba","evaluacion","examen","control","certamen","solemne","pauta","rubrica"]),
+        ("Entregas", ["informe","entrega","proyecto","grupo","tarea","avance","encargo"]),
+        ("Clases", ["clase","unidad","semana","ppt","presentacion","guia","apunte","ejemplo"])]
+LABELS = list(CURSOS) + list(OTROS) + ["sin clasificar"]
+
+def norm(s):
+    s = unicodedata.normalize("NFKD", s.lower())
+    return "".join(c for c in s if not unicodedata.combining(c))
+
+def texto(p):
+    ext = p.rsplit(".", 1)[-1].lower()
+    try:
+        if ext == "pdf":
+            return subprocess.run(["pdftotext","-l","2",p,"-"],capture_output=True,text=True,timeout=30).stdout[:800]
+        if ext in ("docx","pptx","xlsx","doc","ppt","xls","html","txt","md","csv") and os.path.exists(MD):
+            return subprocess.run([MD,p],capture_output=True,text=True,timeout=60).stdout[:800]
+        if ext in ("png","jpg","jpeg") and shutil.which("tesseract"):
+            return subprocess.run(["tesseract",p,"-","-l","spa+eng"],capture_output=True,text=True,timeout=60).stdout[:800]
+    except Exception:
+        pass
+    return ""
+
+def puntuar(txt, kws):
+    return sum(len(re.findall(r"(?<![a-z0-9])"+re.escape(norm(k))+r"(?![a-z0-9])", txt)) for k in kws)
+
+def capa1(nombre, txt):
+    n, t = norm(nombre), norm(txt)
+    sc = {}
+    for lab, kws in {**CURSOS, **OTROS_KW}.items():
+        sc[lab] = 3*puntuar(n, kws) + puntuar(t, kws)
+    for lab in CURSOS:  # codigo de curso = decisivo
+        if lab.split()[0].lower() in n + " " + t: sc[lab] += 20
+    orden = sorted(sc.items(), key=lambda x: -x[1])
+    (l1, s1), (_, s2) = orden[0], orden[1]
+    if s1 >= 3 and s1 >= 2*s2: return l1, ("alta" if s1 >= 6 else "media")
+    return None, None
+
+SCHEMA = {"type":"object","properties":{"etiqueta":{"type":"string","enum":LABELS},"seguridad":{"type":"string","enum":["alta","media","baja"]}},"required":["etiqueta","seguridad"]}
+def _preguntar(nombre, txt, orden):
+    kw = {**CURSOS, **OTROS_KW}
+    desc = "\n".join(f"- {l}: {', '.join(kw[l][:6])}" for l in orden if l in kw)
+    p = (f"Clasifica un archivo de un estudiante en UNA etiqueta.\nEtiquetas:\n{desc}\n- sin clasificar: no calza o es dudoso\n"
+         f"Archivo: {nombre}\nTexto inicial: {txt[:500]}\n"
+         "Indica tambien tu seguridad: alta solo si el nombre o el texto lo dicen claramente; si dudas, baja.\nResponde JSON.")
+    d = json.dumps({"model":os.environ.get("ARGOS_BANDEJA_MODEL","qwen3:4b"),"prompt":p,"stream":False,"think":False,"format":SCHEMA,
+                    "options":{"temperature":0,"num_thread":int(os.environ.get("ARGOS_BANDEJA_THREADS","8")),"num_ctx":1024,"num_predict":60}}).encode()
+    try:
+        r = json.loads(json.load(urllib.request.urlopen("http://127.0.0.1:11434/api/generate", d, timeout=90))["response"])
+        lab = r.get("etiqueta"); return (lab if lab in LABELS else None), r.get("seguridad", "baja")
+    except Exception:
+        return None, "baja"
+
+def capa2(nombre, txt):
+    """Devuelve (etiqueta, conf, motivo). conf='llm' => se puede mover; conf='espera' => queda en 00 Bandeja.
+    Se mueve solo si se cumplen 3 senales: (1) dos preguntas con las etiquetas en orden distinto dan la misma
+    respuesta, (2) el modelo no dice 'baja', (3) hay al menos una palabra clave de esa etiqueta en nombre o texto."""
+    orden = list(CURSOS) + list(OTROS_KW)
+    a, sa = _preguntar(nombre, txt, orden)
+    if not a or a == "sin clasificar": return "sin clasificar", "espera", "modelo: sin clasificar"
+    b, sb = _preguntar(nombre, txt, orden[::-1])
+    if a != b: return a, "espera", f"modelo inconsistente ({a} / {b})"
+    if "baja" in (sa, sb): return a, "espera", "modelo dice seguridad baja"
+    kws = {**CURSOS, **OTROS_KW}[a]
+    if puntuar(norm(nombre) + " " + norm(txt), kws) < 1: return a, "espera", "sin palabra clave que respalde"
+    return a, "llm", f"acuerdo x2, seguridad {sa}/{sb}, con palabra clave"
+
+def tipo(nombre, txt):
+    n = norm(nombre)
+    for t, kws in TIPO:
+        if puntuar(n, kws): return t
+    for t, kws in TIPO:
+        if puntuar(norm(txt[:300]), kws): return t
+    return "Clases"
+
+def ruta(lab, nombre, txt):
+    if lab in CURSOS: return f"{SEM}/{lab}/{tipo(nombre, txt)}"
+    if lab in OTROS: return OTROS[lab]
+    return None
+
+LOGF = "/var/log/argos/bandeja.log"
+def log(m):
+    print(m)
+    try:
+        os.makedirs(os.path.dirname(LOGF), exist_ok=True)
+        with open(LOGF, "a") as fh: fh.write(time.strftime("%Y-%m-%dT%H:%M:%S%z ")+m+"\n")
+    except PermissionError: pass
+
+def transcribiendo():
+    """True si argos-transcribir tiene el lock (Whisper usando la CPU): entonces no se llama al LLM."""
+    import fcntl
+    try:
+        with open("/run/argos-transcribir.lock") as f:
+            fcntl.flock(f, fcntl.LOCK_SH | fcntl.LOCK_NB); return False
+    except BlockingIOError: return True
+    except OSError: return False
+
+def main():
+    if transcribiendo(): os.environ["ARGOS_NO_LLM"] = "1"; log("aviso: transcripción en curso, capa IA omitida (lo dudoso queda en espera)")
+    aplicar = "--aplicar" in sys.argv
+    files = sorted(f for f in os.listdir(BANDEJA) if os.path.isfile(os.path.join(BANDEJA, f)))
+    remotos = None
+    if aplicar:
+        _c = os.path.expanduser("~<USUARIO>/.config/rclone/rclone.conf")
+        _b = ["rclone","--config",_c] if os.path.exists(_c) else ["rclone"]
+        _l = subprocess.run(_b+["lsf","--files-only",f"{REMOTE}/00 Bandeja"],capture_output=True,text=True)
+        if _l.returncode == 0:
+            remotos = set(_l.stdout.splitlines())
+            files = [f for f in files if f in remotos]  # copia local del puente no borra: solo lo que sigue en Drive
+    filas = []; t0 = time.time()
+    for f in files:
+        ts = time.time(); txt = texto(os.path.join(BANDEJA, f))
+        lab, conf = capa1(f, txt); capa = "1-reglas"; motivo = ""
+        if not lab and os.environ.get("ARGOS_NO_LLM"): lab, conf, capa, motivo = "sin clasificar", "espera", "2-omitida", "IA desactivada"
+        elif not lab: lab, conf, motivo = capa2(f, txt); capa = "2-qwen4b"
+        if capa == "1-reglas" and conf != "alta": motivo = f"reglas confianza {conf}"
+        if motivo and conf != "llm": conf = "espera"
+        filas.append((f, ruta(lab, f, txt), capa, conf, round(time.time()-ts, 1), motivo))
+    print(f"{'ARCHIVO':55} {'DESTINO':55} CAPA        CONF  SEG")
+    for f, r, c, cf, s, mo in filas:
+        dest = "(EN ESPERA en 00 Bandeja) " + (r or "") if cf == "espera" else (r or "")
+        print(f"{f[:55]:55} {dest[:55]:55} {c:11} {cf:6} {s}  {mo}")
+    movidos = errores = 0
+    if aplicar:
+        conf_cfg = os.path.expanduser("~<USUARIO>/.config/rclone/rclone.conf")
+        base = ["rclone","--config",conf_cfg] if os.path.exists(conf_cfg) else ["rclone"]
+        if os.geteuid() == 0 and os.path.exists(conf_cfg): base = ["rclone","--config",conf_cfg]
+        lsf = subprocess.run(base+["lsf","--files-only",f"{REMOTE}/00 Bandeja"],capture_output=True,text=True)
+        if lsf.returncode != 0:
+            log("ERROR no se pudo listar 00 Bandeja en Drive"); errores += 1; remotos = set()
+        else:
+            remotos = set(lsf.stdout.splitlines())
+        for f, r, capa, cf, _, mo in filas:
+            if f not in remotos:
+                continue  # ya no esta en Drive (movido antes; la copia local del puente no borra)
+            if cf == "espera" or not r:
+                log(f"EN ESPERA {f} (capa={capa}: {mo or 'sin clasificar'}; sugerido={r or '-'})"); continue
+            dst = f"{REMOTE}/{r}/{f}"
+            ex = subprocess.run(base+["lsf",dst],capture_output=True,text=True)
+            if ex.returncode == 0 and ex.stdout.strip():
+                log(f"QUEDA {f} (ya existe {r}/{f}, no se sobrescribe)"); continue
+            rc = subprocess.run(base+["moveto",f"{REMOTE}/00 Bandeja/{f}",dst]).returncode
+            if rc == 0: movidos += 1; log(f"MOVIDO {f} -> {r} (capa={capa} conf={cf})")
+            else: errores += 1; log(f"ERROR {f} -> {r} rc={rc}")
+    else:
+        print("\n(dry-run: no se movió nada; usa --aplicar para mover en Drive)")
+    n_ok = sum(1 for x in filas if x[1] and x[3] != "espera")
+    en_espera = sum(1 for x in filas if x[3] == "espera" or not x[1])
+    try:
+        with open(STATUS, "w") as s:
+            s.write(f"{'FAIL' if errores else 'OK'} {time.strftime('%Y-%m-%dT%H:%M:%S%z')} archivos={len(filas)} propuestos={n_ok} modo={'aplicar' if aplicar else 'dry-run'} movidos={movidos} en_espera={en_espera} errores={errores} seg={round(time.time()-t0,1)}\n")
+    except PermissionError:
+        print("aviso: sin permiso para escribir", STATUS, file=sys.stderr)
+main()

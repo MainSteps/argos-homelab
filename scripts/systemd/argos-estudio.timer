@@ -1,0 +1,7 @@
+[Unit]
+Description=ArgOS estudio cada hora (despues del puente de :18/:48)
+[Timer]
+OnCalendar=*-*-* *:25:00
+Persistent=true
+[Install]
+WantedBy=timers.target

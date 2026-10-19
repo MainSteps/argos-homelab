@@ -1,0 +1,8 @@
+[Unit]
+Description=ArgOS limites de potencia CPU
+[Service]
+Type=oneshot
+ExecStartPre=/bin/sleep 60
+ExecStart=/usr/local/bin/argos-powercap.sh
+[Install]
+WantedBy=multi-user.target

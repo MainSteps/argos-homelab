@@ -1,0 +1,7 @@
+[Unit]
+Description=ArgOS bandeja cada 30 min (desfasado del puente)
+[Timer]
+OnCalendar=*-*-* *:10,40:00
+Persistent=true
+[Install]
+WantedBy=timers.target

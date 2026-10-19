@@ -1,0 +1,7 @@
+[Unit]
+Description=ArgOS transcribir cada noche a las 00:30 (no empieza audios nuevos despues de 03:00)
+[Timer]
+OnCalendar=*-*-* 00:30:00
+Persistent=true
+[Install]
+WantedBy=timers.target
