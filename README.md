@@ -132,8 +132,8 @@ Los horarios están escalonados a propósito (puente → estudio → índice; tr
 - [x] Monitoreo de estado y respaldo diario con restic
 - [x] Copia de los respaldos fuera del equipo (regla 3-2-1): el repositorio restic está en Google Drive (ver docs/08-backups.md)
 - [ ] Llevar los archivos de más de 5 MB por fuera de Sync, verificados por hash
-- [ ] Instalador reproducible para la nueva versión de la transcripción (términos por ramo y pruebas)
-- [ ] Script que compare la bóveda entre dispositivos
+- [x] Instalador reproducible para la nueva versión de la transcripción (términos por ramo y pruebas)
+- [x] Script que compare la bóveda entre dispositivos
 - [ ] Cambiar la pasta térmica para probar modelos más grandes
 - [ ] Notificaciones automáticas cuando `argos-estado` detecte alertas
 

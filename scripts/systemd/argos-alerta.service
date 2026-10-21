@@ -1,0 +1,6 @@
+[Unit]
+Description=ArgOS alerta: correo cuando cambian las alertas de argos-estado
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/argos-alerta
+Nice=10

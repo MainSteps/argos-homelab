@@ -1,0 +1,50 @@
+#!/usr/bin/env python3
+"""argos-alerta: revisa ArgOS y avisa por correo solo cuando cambia el conjunto de alertas.
+Fuentes: argos-estado (Oracle apagado a demanda NO es alerta), unidades systemd fallidas,
+disco (>=90%) y temperatura (>=90 C). Sin IA, sin servicios pagados.
+Envío: msmtp con /etc/argos/msmtprc (solo root). Si no existe, solo registra (simulación)."""
+import json, os, re, shutil, subprocess, sys, datetime, glob, socket
+DEST = os.environ.get("ARGOS_ALERTA_PARA", "dapa.diego23@gmail.com")
+ESTADO = os.environ.get("ARGOS_ALERTA_ESTADO", "/var/lib/argos/alerta.json")
+MSMTPRC = "/etc/argos/msmtprc"
+IGNORAR_UNIDADES = {"fwupd-refresh.service"}  # falla sola sin red de fwupd; ruido
+def sh(*c): return subprocess.run(c, capture_output=True, text=True).stdout
+alertas = set()
+salida = sh("/usr/local/bin/argos-estado")
+m = re.search(r"^\d+ alertas: (.*)$", salida, re.M)
+if m: alertas |= {"estado: " + a.strip() for a in m.group(1).split(",")}
+for l in sh("systemctl", "--failed", "--plain", "--no-legend").splitlines():
+    u = l.split()[0] if l.split() else ""
+    if u and u not in IGNORAR_UNIDADES: alertas.add("unidad fallida: " + u)
+for p in ("/", "/opt"):
+    t, u, _ = shutil.disk_usage(p)
+    if u / t >= 0.90: alertas.add(f"disco {p} al {u*100//t}%")
+tmax = 0
+for z in glob.glob("/sys/class/thermal/thermal_zone*/temp"):
+    try: tmax = max(tmax, int(open(z).read()) // 1000)
+    except Exception: pass
+if tmax >= 90: alertas.add(f"temperatura {tmax} C")
+previas = set()
+try: previas = set(json.load(open(ESTADO))["alertas"])
+except Exception: pass
+nuevas, resueltas = sorted(alertas - previas), sorted(previas - alertas)
+ahora = datetime.datetime.now().astimezone().isoformat(timespec="seconds")
+json.dump({"alertas": sorted(alertas), "revisado": ahora}, open(ESTADO + ".tmp", "w")); os.replace(ESTADO + ".tmp", ESTADO)
+if not nuevas and not resueltas:
+    print(f"sin cambios ({len(alertas)} alertas activas)"); sys.exit(0)
+if alertas:
+    asunto = f"[ArgOS] {len(alertas)} alerta(s)" + (f": {nuevas[0]}" if nuevas else "")
+else:
+    asunto = "[ArgOS] Recuperado: todo OK"
+cuerpo = (f"Revisión {ahora} en {socket.gethostname()}\n\n"
+          + ("Nuevas:\n" + "".join(f"- {a}\n" for a in nuevas) + "\n" if nuevas else "")
+          + ("Resueltas:\n" + "".join(f"- {a}\n" for a in resueltas) + "\n" if resueltas else "")
+          + ("Activas:\n" + "".join(f"- {a}\n" for a in sorted(alertas)) + "\n" if alertas else "")
+          + "\nDetalle de argos-estado:\n" + salida)
+correo = f"To: {DEST}\nSubject: {asunto}\nContent-Type: text/plain; charset=UTF-8\n\n{cuerpo}"
+if os.path.exists(MSMTPRC) and shutil.which("msmtp") and "--simular" not in sys.argv:
+    r = subprocess.run(["msmtp", "-C", MSMTPRC, DEST], input=correo, text=True, capture_output=True)
+    if r.returncode: print("ERROR al enviar:", r.stderr.strip()); os.remove(ESTADO); sys.exit(1)  # reintenta la próxima vez
+    print("ENVIADO:", asunto)
+else:
+    print("SIMULACION (sin /etc/argos/msmtprc o con --simular), no se envió:\n" + correo)

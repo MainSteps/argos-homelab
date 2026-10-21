@@ -21,7 +21,7 @@ case "$MODEL" in *8b*) echo "modelo 8b bloqueado (demasiado lento en esta CPU)" 
 # qwen3:4b (2507) ignora think:false y /no_think: se manda think:false igual, mas mensaje de
 # sistema, respuesta pre-iniciada y stop en <think>; ultimo recurso: limpiar bloques <think>.
 SYS="Responde en el idioma de la instruccion, directo y sin mostrar tu razonamiento."
-REQ=$(jq -n --arg m "$MODEL" --arg p "$PROMPT" --arg s "$SYS" '{model:$m,messages:[{role:"system",content:$s},{role:"user",content:$p},{role:"assistant",content:"Respuesta:"}],stream:false,think:false,options:{num_thread:(env.ARGOS_IA_THREADS // "12" | tonumber),stop:["<think>","</think>"]}}')
+REQ=$(jq -n --arg m "$MODEL" --arg p "$PROMPT" --arg s "$SYS" '{model:$m,messages:[{role:"system",content:$s},{role:"user",content:$p},{role:"assistant",content:"Respuesta:"}],stream:false,think:false,options:{num_thread:(env.ARGOS_IA_THREADS // "6" | tonumber),stop:["<think>","</think>"]}}')
 RESP=$(curl -sS --max-time 1800 http://127.0.0.1:11434/api/chat -d "$REQ") || fail "API Ollama no responde"
 ANS=$(jq -r '.message.content // empty' <<<"$RESP" | perl -0pe 's{<think>.*?(</think>|\z)}{}gs; s{^.*?</think>}{}s; s{^\s+|\s+\z}{}g'); [ -n "$ANS" ] || fail "respuesta vacia: $(jq -r '.error // "?"' <<<"$RESP")"
 TPS=$(jq -r 'if .eval_duration>0 then (.eval_count/(.eval_duration/1e9)*100|round/100) else 0 end' <<<"$RESP")

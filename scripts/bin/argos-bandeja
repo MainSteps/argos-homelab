@@ -2,16 +2,21 @@
 """argos-bandeja: propone destino para archivos de '00 Bandeja'. Dry-run por defecto; --aplicar mueve en Drive."""
 import os, sys, re, json, time, subprocess, unicodedata, urllib.request, shutil
 BANDEJA = os.environ.get("ARGOS_BANDEJA", "/opt/argos-data/puente/00 Bandeja")
-REMOTE = "<REMOTO_RCLONE>:<CARPETA_DRIVE>"
+REMOTE = "gdrive:ARGOS - ARCHIVOS"
 STATUS = "/var/lib/argos/bandeja-status"
 MD = "/opt/argos-ia/venv/bin/markitdown"
-SEM = "Universidad/<SEMESTRE>"
-CURSOS = {  # EJEMPLO: sigla + nombre del ramo -> palabras clave
- "ABC1234 Ramo de ejemplo": ["abc1234","ramo de ejemplo","tema1","tema2"],
- "XYZ5678 Otro ramo": ["xyz5678","otro ramo","tema3"],
+SEM = "Universidad/2026-2"
+CURSOS = {
+ "BDY1103 Taller de BD": ["bdy1103","taller de bd","base de datos","bases de datos","bbdd","sql","plsql","pl/sql","oracle","consulta","tabla","modelo relacional","normalizacion"],
+ "CCG0031 Competencias Digitales": ["ccg0031","competencias digitales","ofimatica","office 365","microsoft 365","alfabetizacion digital","herramientas digitales"],
+ "DSY1104 Full Stack II": ["dsy1104","full stack","fullstack","react","javascript","html","css","node","frontend","backend","api rest","testing","jest","git","flujo de desarrollo"],
+ "DSY1105 Apps Móviles": ["dsy1105","apps moviles","aplicaciones moviles","movil","android","kotlin","flutter","jetpack","app"],
+ "EAY4730 Ética": ["eay4730","etica","moral","justicia","benevolencia","valores","dilema"],
+ "INU5100 Inglés": ["inu5100","ingles","english","grammar","vocabulary","present perfect","worksheet"],
+ "MAT4141 Estadística": ["mat4141","estadistica","probabilidad","distribucion","media","varianza","regresion"],
 }
 OTROS = {"Personal": "Personal", "Redes": "Redes/Material", "Home Lab": "Home Lab"}
-OTROS_KW = {"Personal": ["certificado","boleta"], "Redes": ["subnetting","router"], "Home Lab": ["docker","proxmox"]}
+OTROS_KW = {"Personal": ["gym","rutina","certificado","boleta","meme"], "Redes": ["subnetting","vlsm","cisco","router","ccna"], "Home Lab": ["argos","docker","proxmox","tailscale"]}
 TIPO = [("Evaluaciones", ["prueba","evaluacion","examen","control","certamen","solemne","pauta","rubrica"]),
         ("Entregas", ["informe","entrega","proyecto","grupo","tarea","avance","encargo"]),
         ("Clases", ["clase","unidad","semana","ppt","presentacion","guia","apunte","ejemplo"])]
@@ -57,7 +62,7 @@ def _preguntar(nombre, txt, orden):
          f"Archivo: {nombre}\nTexto inicial: {txt[:500]}\n"
          "Indica tambien tu seguridad: alta solo si el nombre o el texto lo dicen claramente; si dudas, baja.\nResponde JSON.")
     d = json.dumps({"model":os.environ.get("ARGOS_BANDEJA_MODEL","qwen3:4b"),"prompt":p,"stream":False,"think":False,"format":SCHEMA,
-                    "options":{"temperature":0,"num_thread":int(os.environ.get("ARGOS_BANDEJA_THREADS","8")),"num_ctx":1024,"num_predict":60}}).encode()
+                    "options":{"temperature":0,"num_thread":int(os.environ.get("ARGOS_BANDEJA_THREADS","6")),"num_ctx":1024,"num_predict":60}}).encode()
     try:
         r = json.loads(json.load(urllib.request.urlopen("http://127.0.0.1:11434/api/generate", d, timeout=90))["response"])
         lab = r.get("etiqueta"); return (lab if lab in LABELS else None), r.get("seguridad", "baja")
@@ -114,7 +119,7 @@ def main():
     files = sorted(f for f in os.listdir(BANDEJA) if os.path.isfile(os.path.join(BANDEJA, f)))
     remotos = None
     if aplicar:
-        _c = os.path.expanduser("~<USUARIO>/.config/rclone/rclone.conf")
+        _c = os.path.expanduser("~diego/.config/rclone/rclone.conf")
         _b = ["rclone","--config",_c] if os.path.exists(_c) else ["rclone"]
         _l = subprocess.run(_b+["lsf","--files-only",f"{REMOTE}/00 Bandeja"],capture_output=True,text=True)
         if _l.returncode == 0:
@@ -135,7 +140,7 @@ def main():
         print(f"{f[:55]:55} {dest[:55]:55} {c:11} {cf:6} {s}  {mo}")
     movidos = errores = 0
     if aplicar:
-        conf_cfg = os.path.expanduser("~<USUARIO>/.config/rclone/rclone.conf")
+        conf_cfg = os.path.expanduser("~diego/.config/rclone/rclone.conf")
         base = ["rclone","--config",conf_cfg] if os.path.exists(conf_cfg) else ["rclone"]
         if os.geteuid() == 0 and os.path.exists(conf_cfg): base = ["rclone","--config",conf_cfg]
         lsf = subprocess.run(base+["lsf","--files-only",f"{REMOTE}/00 Bandeja"],capture_output=True,text=True)

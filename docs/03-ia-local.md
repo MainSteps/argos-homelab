@@ -29,3 +29,7 @@ Extrae el texto del archivo (PDF, Office o texto plano), lo junta con la instruc
 
 - **Modelos de 8B bloqueados**: el script los rechaza porque son demasiado lentos en esta CPU, y el equipo tiene problemas térmicos (pasta térmica seca).
 - Sin GPU. Un modelo de 4B sirve para clasificar y resumir, no para razonar en profundidad.
+
+## Hilos
+
+`argos-ia` (`ARGOS_IA_THREADS`) y `argos-bandeja` (`ARGOS_BANDEJA_THREADS`) usan **6 hilos** por defecto, de los 12 del i5-10500T, para evitar los cuelgues que aparecían con todos los hilos. Las dos variables también están en `/etc/environment`. Verificado en el log de Ollama: `n_threads = 6`.

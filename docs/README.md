@@ -14,3 +14,4 @@ Un documento por subsistema, en el orden en que fluyen los datos.
 | 8 | [Backups](08-backups.md) | Respaldo diario con restic |
 
 [← Volver al README](../README.md)
+- [09 Alertas por correo](09-alertas.md)

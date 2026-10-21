@@ -1,0 +1,13 @@
+# Plantilla: copiar a /etc/argos/msmtprc (root:root 600) y poner la clave de aplicación
+defaults
+auth on
+tls on
+tls_trust_file /etc/ssl/certs/ca-certificates.crt
+logfile /var/log/argos-msmtp.log
+account gmail
+host smtp.gmail.com
+port 587
+from CUENTA@gmail.com
+user CUENTA@gmail.com
+passwordeval cat /etc/argos/gmail-app-password
+account default : gmail

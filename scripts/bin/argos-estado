@@ -1,16 +1,31 @@
 #!/usr/bin/env python3
 """argos-estado: tabla determinista de /var/lib/argos/*-status (sin IA).
-Filas INFO (informativas) no cuentan como alerta: powercap."""
-import os, glob, re, time, datetime
+Filas INFO (informativas) no cuentan como alerta: powercap y Oracle apagado a demanda."""
+import os, glob, re, time, datetime, subprocess
 D = os.environ.get("ARGOS_STATUS_DIR", "/var/lib/argos")
 R, G, Y, N = "\033[31m", "\033[32m", "\033[36m", "\033[0m"
 if not os.isatty(1): R = G = Y = N = ""
 INFO = {"powercap"}  # informativo, no alerta por contenido
-EDAD_MAX = {"transcribir": 30}  # horas; corre 1 vez por noche (default 24)
+EDAD_MAX = {"transcribir": 30, "ia": 24*365}  # ia corre a demanda: su edad no es alerta  # horas; corre 1 vez por noche (default 24)
+
+def oracle_contenedor():
+    """Estado real del contenedor: 'exited', 'running', 'restarting', 'dead', ... o None si no se pudo ver."""
+    for cmd in (["docker"], ["sudo", "-n", "docker"]):
+        try:
+            r = subprocess.run(cmd + ["inspect", "-f", "{{.State.Status}} {{.State.Restarting}}", "argos-oracle"],
+                               capture_output=True, text=True, timeout=10)
+            if r.returncode == 0: return r.stdout.split()[0]
+        except Exception: pass
+    return None
 
 def leer(srv):
     p = os.path.join(D, srv + "-status")
     return open(p).read().strip() if os.path.exists(p) else ""
+
+# Oracle apagado a proposito = db-status DOWN (lo escribe 'argos-db down') y contenedor detenido limpio.
+_db = leer("db").split()
+_ct = oracle_contenedor() if _db and _db[0] == "DOWN" else None
+ORACLE_A_DEMANDA = bool(_db) and _db[0] == "DOWN" and _ct in ("exited", "created")
 
 alertas = []; rows = []
 for p in sorted(glob.glob(os.path.join(D, "*-status"))):
@@ -24,6 +39,11 @@ for p in sorted(glob.glob(os.path.join(D, "*-status"))):
     det = " ".join(txt.split())[:60]
     info = srv in INFO
     if re.match(r"\d{4}-\d{2}-\d{2}", estado): estado = "INFO" if info else "OK"  # linea parte con fecha (powercap)
+    if srv == "db" and estado == "DOWN":
+        if ORACLE_A_DEMANDA: info, estado, det = True, "INFO", "apagado a demanda (argos-db up para usarlo) · " + det
+        else: det = f"contenedor={_ct or 'desconocido'} · " + det  # caida real -> alerta
+    if srv == "db-dump" and estado == "SKIP" and "oracle apagado" in txt and ORACLE_A_DEMANDA:
+        info, estado, det = True, "INFO", "sin dump: Oracle apagado a demanda · " + det
     if info: estado = "INFO"
     mal = not info and (estado not in ("OK", "RUNNING", "UP") or edad > EDAD_MAX.get(srv, 24))
     if mal: alertas.append(f"{srv} {estado}" + (f" ({edad:.0f}h)" if edad > EDAD_MAX.get(srv, 24) else ""))
