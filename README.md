@@ -130,7 +130,7 @@ Los horarios están escalonados a propósito (puente → estudio → índice; tr
 - [x] Obsidian Sync headless
 - [x] Transcripción nocturna de clases
 - [x] Monitoreo de estado y respaldo diario con restic
-- [ ] Copia de los respaldos fuera del equipo (regla 3-2-1)
+- [x] Copia de los respaldos fuera del equipo (regla 3-2-1): el repositorio restic está en Google Drive (ver docs/08-backups.md)
 - [ ] Llevar los archivos de más de 5 MB por fuera de Sync, verificados por hash
 - [ ] Instalador reproducible para la nueva versión de la transcripción (términos por ramo y pruebas)
 - [ ] Script que compare la bóveda entre dispositivos
