@@ -1,0 +1,19 @@
+#!/bin/bash
+# argos-kuma-sondas: cada minuto revisa lo que Kuma no ve desde su contenedor y lo reporta por push.
+P=/usr/local/bin/argos-kuma-push
+# Ollama (solo escucha en 127.0.0.1)
+if V=$(curl -fsS -m 5 http://127.0.0.1:11434/api/version 2>/dev/null); then $P OLLAMA "Ollama $(echo "$V" | sed -n 's/.*"version":"\([^"]*\)".*/\1/p')"; else $P OLLAMA "DOWN:Ollama no responde"; fi
+# Obsidian Sync
+if systemctl is-active -q argos-obsidian.service; then $P OBSIDIAN "Sync activo"; else $P OBSIDIAN "DOWN:argos-obsidian $(systemctl is-active argos-obsidian.service)"; fi
+# Tailscale
+if tailscale status --json 2>/dev/null | grep -q '"BackendState": *"Running"'; then $P TAILSCALE "Running"; else $P TAILSCALE "DOWN:Tailscale no está Running"; fi
+# Recursos
+DISCO=$(df --output=pcent / | tail -1 | tr -dc 0-9)
+TMAX=0; for z in /sys/class/thermal/thermal_zone*/temp; do t=$(( $(cat "$z" 2>/dev/null || echo 0) / 1000 )); [ "$t" -gt "$TMAX" ] && TMAX=$t; done
+RAMLIBRE=$(awk '/MemTotal/{t=$2}/MemAvailable/{a=$2}END{printf "%d", a*100/t}' /proc/meminfo)
+CARGA=$(cut -d" " -f1 /proc/loadavg)
+M="disco ${DISCO}% · CPU ${TMAX}°C · RAM libre ${RAMLIBRE}% · carga ${CARGA}"
+if [ "$DISCO" -ge 90 ] || [ "$TMAX" -ge 90 ] || [ "$RAMLIBRE" -lt 5 ]; then $P RECURSOS "DOWN:$M" "$TMAX"; else $P RECURSOS "$M" "$TMAX"; fi
+# Latido externo (dead man's switch), si Diego pegó la URL
+U=$(cat /etc/argos/latido-externo-url 2>/dev/null); [ -n "$U" ] && curl -fsS -m 10 -o /dev/null --retry 2 "$U" 2>/dev/null
+exit 0

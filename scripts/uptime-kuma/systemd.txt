@@ -1,0 +1,12 @@
+# /etc/systemd/system/argos-kuma-sondas.timer  (cada 60 s)  -> argos-kuma-sondas.service (oneshot)
+# /etc/systemd/system/argos-latido.timer       (*:0/10)     -> argos-latido.service (oneshot)
+# Drop-in en cada tarea: /etc/systemd/system/argos-<tarea>.service.d/kuma.conf
+#   tareas: backup transcribir puente bandeja estudio busqueda alerta
+[Service]
+ExecStartPost=+/usr/local/bin/argos-kuma-push <CLAVE> "argos-<tarea> OK"
+# /etc/systemd/system/docker.service.d/argos-tailscale.conf
+[Unit]
+After=tailscaled.service network-online.target
+Wants=network-online.target
+# /etc/sysctl.d/60-argos-kuma.conf
+net.ipv4.ip_nonlocal_bind=1

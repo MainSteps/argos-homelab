@@ -1,0 +1,9 @@
+#!/bin/bash
+# argos-kuma-push CLAVE [msg] [ping] — avisa a Uptime Kuma (monitor push). Tokens en /etc/argos/uptime-kuma-push.env (root 600).
+# Nunca hace fallar la unidad que lo llama.
+K="$1"; MSG="${2:-OK}"; PING="${3:-}"
+T=$(sed -n "s/^${K}=//p" /etc/argos/uptime-kuma-push.env 2>/dev/null)
+[ -n "$T" ] || exit 0
+ST=up; case "$MSG" in DOWN:*) ST=down; MSG="${MSG#DOWN:}";; esac
+curl -fsS -m 10 -o /dev/null -G "http://<IP_LAN>:3001/api/push/$T" --data-urlencode "status=$ST" --data-urlencode "msg=$MSG" ${PING:+--data-urlencode "ping=$PING"} 2>/dev/null || true
+exit 0

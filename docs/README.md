@@ -15,3 +15,4 @@ Un documento por subsistema, en el orden en que fluyen los datos.
 
 [← Volver al README](../README.md)
 - [09 Alertas por correo](09-alertas.md)
+- [10 Monitoreo con Uptime Kuma](10-uptime-kuma.md)
