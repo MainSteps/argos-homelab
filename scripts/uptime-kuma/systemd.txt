@@ -1,5 +1,4 @@
 # /etc/systemd/system/argos-kuma-sondas.timer  (cada 60 s)  -> argos-kuma-sondas.service (oneshot)
-# /etc/systemd/system/argos-latido.timer       (*:0/10)     -> argos-latido.service (oneshot)
 # Drop-in en cada tarea: /etc/systemd/system/argos-<tarea>.service.d/kuma.conf
 #   tareas: backup transcribir puente bandeja estudio busqueda alerta
 [Service]

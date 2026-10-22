@@ -91,7 +91,6 @@ Además: `argos-backup` (restic, diario) respalda todo el equipo, `argos-estado`
 | `argos-backup` | 03:30 diario | Respaldo restic con retención y verificación semanal | [backups](docs/08-backups.md) |
 | `argos-obsidian` | continuo | Obsidian Sync headless de la bóveda | [sync](docs/05-sync.md) |
 | `argos-kuma-sondas` | cada minuto | Sondas locales (Ollama, Sync, Tailscale, recursos) para Uptime Kuma | [monitoreo](docs/10-uptime-kuma.md) |
-| `argos-latido` | cada 10 min | Latido para el vigilante externo en GitHub Actions | [monitoreo](docs/10-uptime-kuma.md) |
 | `argos-powercap` | al arranque | Límites de potencia de CPU (hoy desactivado) | [estado](docs/07-estado.md) |
 
 Herramientas de línea de comandos: `argos-ia`, `argos-buscar`, `argos-md`, `argos-estado` ([IA local](docs/03-ia-local.md), [estado](docs/07-estado.md)).

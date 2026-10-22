@@ -62,15 +62,9 @@ ExecStartPost=+/usr/local/bin/argos-kuma-push <CLAVE> "argos-<tarea> OK"
 
 Si ArgOS se apaga, Kuma se apaga con él. Para cubrirlo, sin cuentas nuevas y gratis:
 
-1. `argos-latido.timer` publica cada 10 min un "latido" en un **tema ntfy privado distinto** (no suscrito, no notifica a nadie).
-2. El workflow [`argos-vigilante`](../scripts/uptime-kuma/argos-vigilante.yml) corre cada 15 min en GitHub Actions y lee los latidos de las últimas 12 h desde la caché de ntfy.sh.
-3. Si el último latido tiene 40–55 min, manda **"ArgOS no da señales"** (urgente) al tema de alertas; a las 6 h, un recordatorio; cuando vuelve, **"ArgOS volvió"**. No necesita guardar estado.
+Aviso externo con **Healthchecks.io** (plan gratis): `argos-kuma-sondas` llama cada minuto a la URL de ping guardada en `/etc/argos/latido-externo-url` (root 600). El check `ArgOS` tiene periodo 5 min y gracia 5 min; si falta el latido, Healthchecks avisa por ntfy (prioridad máxima) y por correo.
 
-> **Pendiente de activar:** el archivo vive en `scripts/uptime-kuma/` porque el token del servidor no tiene el permiso `workflow` de GitHub. Para activarlo: `gh auth refresh -s workflow` y copiarlo a `.github/workflows/argos-vigilante.yml`.
-
-Los temas están en *Secrets* del repo (`NTFY_TOPIC`, `LATIDO_TOPIC`). Limitaciones: los cron de GitHub pueden atrasarse algunos minutos, y GitHub desactiva los workflows programados de repos públicos tras 60 días sin actividad (se reactivan con un clic o con cualquier commit).
-
-Alternativa con cuenta: Healthchecks.io (plan gratis). Si algún día se crea, basta pegar la URL de ping en `/etc/argos/latido-externo-url` (root 600) y la sonda la llamará cada minuto.
+> Se descartó el vigilante con GitHub Actions (cron poco puntual y se desactiva tras 60 días sin actividad).
 
 ## Operación
 

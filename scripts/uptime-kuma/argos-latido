@@ -1,7 +1,0 @@
-#!/bin/bash
-# argos-latido: publica un latido en un tema ntfy privado (no notifica a nadie).
-# Un vigilante externo (GitHub Actions del repo argos-homelab) revisa que existan latidos recientes;
-# si ArgOS se apaga o pierde internet, ese vigilante manda la alerta al tema de alertas.
-T=$(cat /etc/argos/latido-topic 2>/dev/null) || exit 0
-[ -n "$T" ] && curl -fsS -m 15 --retry 2 -o /dev/null -H "Title: latido" -d "$(hostname) $(date -Is)" "https://ntfy.sh/$T" 2>/dev/null
-exit 0
