@@ -1,4 +1,4 @@
-# Alertas por correo
+# Alertas (ntfy)
 
 **Script:** `argos-alerta` · **Unidad:** `argos-alerta.timer` (cada 30 min, en los minutos 07 y 37)
 
@@ -11,15 +11,19 @@
 
 ## Cuándo avisa
 
-Guarda las alertas activas en `/var/lib/argos/alerta.json` y manda un correo **solo cuando eso cambia**: una alerta nueva o una que se resolvió. Cuando todo vuelve a la normalidad, manda un correo de "Recuperado". Si el envío falla, borra el estado para reintentar en la próxima revisión.
+Guarda las alertas activas en `/var/lib/argos/alerta.json` y avisa **solo cuando eso cambia**: una alerta nueva o una que se resolvió. Cuando todo vuelve a la normalidad, avisa "Recuperado". Si el envío falla, borra el estado para reintentar en la próxima revisión.
 
 No usa IA ni servicios pagados.
 
 ## Envío
 
-Usa `msmtp` con `/etc/argos/msmtprc` (root:root, 600) y la cuenta de Gmail con una **clave de aplicación** guardada en `/etc/argos/gmail-app-password` (root:root, 600). Hay una plantilla en [`scripts/config/msmtprc.example`](../scripts/config/msmtprc.example).
+Principal: **ntfy** público (`https://ntfy.sh`). El tema está en `/etc/argos/ntfy-topic` (root:root, 600); es largo y aleatorio porque los temas públicos los lee quien sepa el nombre. El mensaje solo lleva el título y la lista de alertas nuevas o resueltas, nunca el detalle de `argos-estado`. Prioridad alta si hay alertas nuevas.
 
-Si `/etc/argos/msmtprc` no existe, o si se corre con `--simular`, solo imprime el correo en el journal (`journalctl -u argos-alerta`).
+Respaldo opcional: `msmtp` con `/etc/argos/msmtprc` (plantilla en [`scripts/config/msmtprc.example`](../scripts/config/msmtprc.example)). Hoy no está configurado: Outlook/Hotmail personal ya no acepta SMTP con contraseña simple.
+
+Si no hay ningún medio configurado, o se corre con `--simular`, solo imprime en el journal (`journalctl -u argos-alerta`).
+
+Complementos: **Uptime Kuma** ([10-uptime-kuma.md](10-uptime-kuma.md)) revisa cada minuto y avisa por el mismo tema, y **Healthchecks.io** avisa si ArgOS deja de dar señales (apagado o sin internet).
 
 ## Probar sin tocar el estado real
 

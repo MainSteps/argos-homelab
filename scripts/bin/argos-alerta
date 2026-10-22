@@ -42,7 +42,15 @@ cuerpo = (f"Revisión {ahora} en {socket.gethostname()}\n\n"
           + ("Activas:\n" + "".join(f"- {a}\n" for a in sorted(alertas)) + "\n" if alertas else "")
           + "\nDetalle de argos-estado:\n" + salida)
 correo = f"To: {DEST}\nSubject: {asunto}\nContent-Type: text/plain; charset=UTF-8\n\n{cuerpo}"
-if os.path.exists(MSMTPRC) and shutil.which("msmtp") and "--simular" not in sys.argv:
+NTFY = "/etc/argos/ntfy-topic"
+if os.path.exists(NTFY) and "--simular" not in sys.argv:
+    import urllib.request
+    tema = open(NTFY).read().strip()
+    texto = "".join(f"+ {a}\n" for a in nuevas) + "".join(f"OK {a}\n" for a in resueltas) or "Todo OK"
+    req = urllib.request.Request(f"https://ntfy.sh/{tema}", data=texto.encode(), headers={"Title": asunto.encode("utf-8").decode("latin-1"), "Priority": "high" if nuevas else "default", "Tags": "warning" if nuevas else "white_check_mark"})
+    try: urllib.request.urlopen(req, timeout=20); print("NTFY ENVIADO:", asunto)
+    except Exception as e: print("ERROR ntfy:", e); os.remove(ESTADO); sys.exit(1)
+elif os.path.exists(MSMTPRC) and shutil.which("msmtp") and "--simular" not in sys.argv:
     r = subprocess.run(["msmtp", "-C", MSMTPRC, DEST], input=correo, text=True, capture_output=True)
     if r.returncode: print("ERROR al enviar:", r.stderr.strip()); os.remove(ESTADO); sys.exit(1)  # reintenta la próxima vez
     print("ENVIADO:", asunto)
