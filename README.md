@@ -118,7 +118,7 @@ Los horarios están escalonados a propósito (puente → estudio → índice; tr
 
 ## Limitaciones conocidas
 
-- **Obsidian Sync tiene un límite de 5 MB por archivo** en el plan actual, así que los PDFs más pesados no llegan a ArgOS por esa vía.
+- **Obsidian Sync tiene un límite de 5 MB por archivo** en el plan actual, así que los PDFs más pesados no llegan a ArgOS por esa vía: se copian aparte y se verifican por SHA-256 (ver [sync](docs/05-sync.md)).
 - **Los modelos de 8B están bloqueados**: son demasiado lentos en esta CPU y el equipo tiene problemas térmicos.
 - **La transcripción corre solo de noche**, porque en clases largas va más lenta que el tiempo real.
 
@@ -131,7 +131,7 @@ Los horarios están escalonados a propósito (puente → estudio → índice; tr
 - [x] Transcripción nocturna de clases
 - [x] Monitoreo de estado y respaldo diario con restic
 - [x] Copia de los respaldos fuera del equipo (regla 3-2-1): el repositorio restic está en Google Drive (ver docs/08-backups.md)
-- [ ] Llevar los archivos de más de 5 MB por fuera de Sync, verificados por hash
+- [x] Llevar los archivos de más de 5 MB por fuera de Sync, verificados por hash
 - [x] Instalador reproducible para la nueva versión de la transcripción (términos por ramo y pruebas)
 - [x] Script que compare la bóveda entre dispositivos
 - [ ] Cambiar la pasta térmica para probar modelos más grandes
