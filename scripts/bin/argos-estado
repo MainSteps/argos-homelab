@@ -45,8 +45,8 @@ for p in sorted(glob.glob(os.path.join(D, "*-status"))):
     if srv == "db-dump" and estado == "SKIP" and "oracle apagado" in txt and ORACLE_A_DEMANDA:
         info, estado, det = True, "INFO", "sin dump: Oracle apagado a demanda · " + det
     if info: estado = "INFO"
-    mal = not info and (estado not in ("OK", "RUNNING", "UP") or edad > EDAD_MAX.get(srv, 24))
-    if mal: alertas.append(f"{srv} {estado}" + (f" ({edad:.0f}h)" if edad > EDAD_MAX.get(srv, 24) else ""))
+    mal = not info and (estado not in ("OK", "RUNNING", "UP") or (estado != "RUNNING" and edad > EDAD_MAX.get(srv, 24)))
+    if mal: alertas.append(f"{srv} {estado}" + (f" ({edad:.0f}h)" if estado != "RUNNING" and edad > EDAD_MAX.get(srv, 24) else ""))
     color = R if mal else (Y if info else G)
     rows.append(f"{color}{srv:10} {estado:8} {edad:6.1f}h  {det[:90]}{N}")
 ESPERADOS = ["bandeja", "busqueda", "estudio", "ia", "transcribir"]
