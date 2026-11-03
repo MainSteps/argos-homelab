@@ -1,0 +1,2 @@
+# Una alerta por línea. Opcional: "| hasta YYYY-MM-DD" (se oculta después de esa fecha)
+Entrega proyecto: vie 20:00 | hasta 2099-12-31

@@ -2,6 +2,12 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [1.1.0] - 2026-11-03
+
+### Agregado
+- Pantalla de estado: tablero para Turing Smart Screen 3.5" Rev A en [`pantalla/`](pantalla/) (código, servicio systemd, horario y alertas de ejemplo) y documentación en [docs/11-pantalla.md](docs/11-pantalla.md).
+- Captura del tablero en la sección "Vista rápida" del README.
+
 ## [1.0.0] - 2026-11-03
 
 ### Agregado
@@ -19,4 +25,5 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 - 2026-10-21: alertas por correo (`argos-alerta`), archivos grandes fuera de Sync, copia de respaldos fuera del equipo y prueba de restauración.
 - 2026-10-19: documentación inicial.
 
+[1.1.0]: https://github.com/MainSteps/argos-homelab/releases/tag/v1.1.0
 [1.0.0]: https://github.com/MainSteps/argos-homelab/releases/tag/v1.0.0

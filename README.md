@@ -38,6 +38,10 @@ Capturas reales de ArgOS (3 de noviembre de 2026).
 
 ![Página de estado de Uptime Kuma](docs/img/uptime-kuma.png)
 
+**Pantalla de estado**: Turing Smart Screen 3.5" conectada por USB con un tablero propio: hardware, servicios, respaldo, próxima clase y alertas ([pantalla](docs/11-pantalla.md)). Horario y alerta de ejemplo.
+
+![Tablero ArgOS en la Turing Smart Screen](docs/img/argos-pantalla.png)
+
 ## Lo destacado
 
 - **9 unidades systemd activas** (8 timers + Sync continuo) coordinadas con horarios escalonados y locks para que las tareas pesadas no compitan por la CPU.
@@ -114,6 +118,7 @@ Además: `argos-backup` (restic, diario) respalda todo el equipo, `argos-estado`
 | `argos-backup` | 03:30 diario | Respaldo restic con retención y verificación semanal | [backups](docs/08-backups.md) |
 | `argos-obsidian` | continuo | Obsidian Sync headless de la bóveda | [sync](docs/05-sync.md) |
 | `argos-kuma-sondas` | cada minuto | Sondas locales (Ollama, Sync, Tailscale, recursos) para Uptime Kuma | [monitoreo](docs/10-uptime-kuma.md) |
+| `argos-screen` | continuo | Tablero en la pantalla USB de 3,5" (hardware, servicios, respaldo, próxima clase, alertas) | [pantalla](docs/11-pantalla.md) |
 | `argos-powercap` | al arranque | Límites de potencia de CPU (hoy desactivado) | [estado](docs/07-estado.md) |
 
 Herramientas de línea de comandos: `argos-ia`, `argos-buscar`, `argos-md`, `argos-estado` ([IA local](docs/03-ia-local.md), [estado](docs/07-estado.md)).
@@ -171,6 +176,7 @@ argos-homelab/
 ├── .github/         Plantillas de issues
 ├── docs/              Un documento por subsistema (índice en docs/README.md)
 │   └── img/           Capturas
+├── pantalla/          Tablero de la Turing Smart Screen (código, servicio y ejemplos)
 ├── scripts/
 │   ├── bin/           Scripts tal como corren en el servidor (sanitizados)
 │   ├── systemd/       Unidades .service y .timer

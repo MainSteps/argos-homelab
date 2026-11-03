@@ -1,0 +1,15 @@
+[Unit]
+Description=Tablero ArgOS en Turing Smart Screen 3.5
+After=network-online.target docker.service
+
+[Service]
+User=diego
+SupplementaryGroups=dialout
+WorkingDirectory=/opt/argos-screen
+ExecStart=/opt/turing-smart-screen/venv/bin/python /opt/argos-screen/argos_screen.py
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

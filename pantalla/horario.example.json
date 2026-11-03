@@ -1,0 +1,12 @@
+{
+  "zona": "America/Santiago",
+  "duracion_min": 80,
+  "clases": [
+    {"dia": 0, "hora": "19:00", "ramo": "Programación", "sala": "A101"},
+    {"dia": 1, "hora": "16:30", "ramo": "Bases de Datos", "sala": "B204"},
+    {"dia": 1, "hora": "19:00", "ramo": "Inglés", "sala": "A102"},
+    {"dia": 2, "hora": "19:00", "ramo": "Redes", "sala": "C301"},
+    {"dia": 3, "hora": "19:00", "ramo": "Matemáticas", "sala": "A101"},
+    {"dia": 4, "hora": "19:00", "ramo": "Bases de Datos", "sala": "B204"}
+  ]
+}
