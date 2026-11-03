@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Configura Uptime Kuma de ArgOS (idempotente en lo posible). Lee secretos de /etc/argos, no los imprime."""
-import secrets, os, sys
+import secrets, os
 from uptime_kuma_api import UptimeKumaApi, MonitorType, NotificationType
 cfg = dict(l.strip().split("=",1) for l in open("/etc/argos/uptime-kuma-admin") if "=" in l)
 TOPIC = open("/etc/argos/ntfy-topic").read().strip()

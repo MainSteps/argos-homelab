@@ -4,7 +4,7 @@ Fuente: copia local del puente  /opt/argos-data/puente/Universidad/<SEMESTRE>/<C
 Destino: <RUTA_BOVEDA>/Ramos/<Ramo>/Clases/Clase AAAA-MM-DD HHMM - <Ramo>.md
 Nunca borra ni mueve el audio original (queda en Drive). Estado por sha256 en /opt/argos-data/transcribir/hechos.json.
 Uso: argos-transcribir [--archivo RUTA --ramo "Ramo de ejemplo"]   (sin argumentos: procesa lo nuevo)"""
-import os, sys, json, time, glob, hashlib, subprocess, fcntl, datetime, re
+import os, sys, json, time, glob, hashlib, subprocess, fcntl, datetime
 import numpy as np
 SRC = os.environ.get("ARGOS_TR_SRC", "/opt/argos-data/puente/Universidad/<SEMESTRE>")
 VAULT = os.environ.get("ARGOS_TR_VAULT", "<RUTA_BOVEDA>/Ramos")

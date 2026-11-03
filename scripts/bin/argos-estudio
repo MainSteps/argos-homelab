@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """argos-estudio: convierte material de Universidad (copia del puente) a notas .md en la boveda Obsidian. Sin IA. Idempotente; nunca sobrescribe notas editadas por el usuario."""
-import os, sys, json, time, hashlib, shutil, subprocess, unicodedata
+import os, sys, json, time, hashlib, shutil, subprocess
 SRC = os.environ.get("ARGOS_ESTUDIO_SRC", "/opt/argos-data/puente/Universidad/<SEMESTRE>")
 VAULT = os.environ.get("ARGOS_ESTUDIO_VAULT", "<RUTA_BOVEDA>/Ramos")
 INDEX = os.environ.get("ARGOS_ESTUDIO_INDEX", "/opt/argos-data/estudio/index.json")

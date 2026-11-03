@@ -4,7 +4,7 @@ Fuentes: argos-estado (Oracle apagado a demanda NO es alerta), unidades systemd 
 disco (>=90%) y temperatura (>=90 C). Sin IA, sin servicios pagados.
 Envío: msmtp con /etc/argos/msmtprc (solo root). Si no existe, solo registra (simulación)."""
 import json, os, re, shutil, subprocess, sys, datetime, glob, socket
-DEST = os.environ.get("ARGOS_ALERTA_PARA", "dapa.diego23@gmail.com")
+DEST = os.environ.get("ARGOS_ALERTA_PARA", "<CORREO_DESTINO>")
 ESTADO = os.environ.get("ARGOS_ALERTA_ESTADO", "/var/lib/argos/alerta.json")
 MSMTPRC = "/etc/argos/msmtprc"
 IGNORAR_UNIDADES = {"fwupd-refresh.service"}  # falla sola sin red de fwupd; ruido
