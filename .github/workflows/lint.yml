@@ -1,0 +1,27 @@
+name: lint
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: shellcheck
+        run: |
+          shellcheck -S warning scripts/bin/argos-backup.sh scripts/bin/argos-ia scripts/bin/argos-md \
+            scripts/bin/argos-powercap.sh scripts/bin/argos-puente.sh \
+            scripts/uptime-kuma/argos-kuma-push scripts/uptime-kuma/argos-kuma-sondas
+      - name: ruff
+        run: |
+          pipx run ruff check scripts/bin/argos-alerta scripts/bin/argos-bandeja scripts/bin/argos-buscar \
+            scripts/bin/argos-estado scripts/bin/argos-estudio scripts/bin/argos-indexar scripts/bin/argos-mapa \
+            scripts/bin/argos-transcribir scripts/uptime-kuma/configurar.py scripts/uptime-kuma/verificar.py
+      - name: sintaxis Python
+        run: |
+          for f in scripts/bin/argos-alerta scripts/bin/argos-bandeja scripts/bin/argos-buscar scripts/bin/argos-estado \
+            scripts/bin/argos-estudio scripts/bin/argos-indexar scripts/bin/argos-mapa scripts/bin/argos-transcribir \
+            scripts/uptime-kuma/*.py; do python3 -m py_compile "$f"; done
