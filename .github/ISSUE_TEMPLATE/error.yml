@@ -1,0 +1,26 @@
+name: Error
+description: Algo no funciona como dice la documentación
+labels: [bug]
+body:
+  - type: textarea
+    id: que
+    attributes:
+      label: Qué pasó
+      description: Qué esperabas y qué ocurrió. No pegues IPs, tokens ni rutas personales.
+    validations:
+      required: true
+  - type: input
+    id: componente
+    attributes:
+      label: Script o servicio
+      placeholder: argos-indexar, argos-backup.timer...
+  - type: textarea
+    id: salida
+    attributes:
+      label: Salida de argos-estado o del log
+      render: text
+  - type: input
+    id: entorno
+    attributes:
+      label: Entorno
+      placeholder: Ubuntu 26.04, Ollama 0.40, CPU...

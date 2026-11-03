@@ -1,0 +1,10 @@
+name: Idea o pregunta
+description: Propuesta de mejora o duda sobre cómo replicarlo
+labels: [enhancement]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: Descripción
+    validations:
+      required: true

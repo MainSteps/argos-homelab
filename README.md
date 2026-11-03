@@ -15,10 +15,32 @@ ArgOS es mi home lab: un mini PC de oficina con Linux que trabaja solo, 24/7. Re
 
 > Proyecto personal de Diego Pazos, estudiante de Ingeniería en Informática. Es mi proyecto principal y el que más me ha enseñado sobre Linux, systemd, automatización e IA local.
 
+<p align="center"><a href="docs/00-replicar.md"><b>🛠️ Cómo montar el tuyo →</b></a> · <a href="docs/README.md">Documentación</a> · <a href="CHANGELOG.md">Cambios</a></p>
+
+## Vista rápida
+
+Capturas reales de ArgOS (3 de noviembre de 2026).
+
+**`argos-estado`**: el estado de cada servicio en una tabla.
+
+![Salida de argos-estado](docs/img/argos-estado.png)
+
+**Timers de systemd**: horarios escalonados para que las tareas pesadas no se crucen.
+
+![systemctl list-timers argos-*](docs/img/argos-timers.png)
+
+**`argos-buscar`**: búsqueda híbrida (semántica + palabras clave) sobre la bóveda.
+
+![Resultado de argos-buscar](docs/img/argos-buscar.png)
+
+**Página de estado de Uptime Kuma**: sondas cada minuto. Oracle aparece en 0 % porque se enciende solo a demanda.
+
+![Página de estado de Uptime Kuma](docs/img/uptime-kuma.png)
+
 ## Lo destacado
 
-- **7 servicios systemd activos** (6 timers + Sync continuo) coordinados con horarios escalonados y locks para que las tareas pesadas no compitan por la CPU.
-- **220 notas y 1.982 fragmentos** en un índice de búsqueda híbrida (embeddings `bge-m3` + FTS5). Una pasada incremental tarda unos 25 s.
+- **9 unidades systemd activas** (8 timers + Sync continuo) coordinadas con horarios escalonados y locks para que las tareas pesadas no compitan por la CPU.
+- **235 notas y 2.132 fragmentos** en un índice de búsqueda híbrida (embeddings `bge-m3` + FTS5). Una pasada incremental tarda unos 25 s.
 - **`qwen3:4b` a ~12 tokens/s** en CPU, validado con una prueba sostenida de 15 minutos: sin reinicios y con 72 °C de máximo.
 - **Transcripción de clases con Whisper `large-v3-turbo` (int8)**, que se pausa sola si la CPU llega a 82 °C.
 - **Clasificación con IA desconfiada:** las reglas deciden primero y el modelo solo mueve un archivo si coincide consigo mismo en dos preguntas, dice tener seguridad y lo respalda una palabra clave.
@@ -144,7 +166,10 @@ Los horarios están escalonados a propósito (puente → estudio → índice; tr
 ```text
 argos-homelab/
 ├── README.md
+├── CHANGELOG.md · CONTRIBUTING.md · SECURITY.md
+├── .github/         Plantillas de issues
 ├── docs/              Un documento por subsistema (índice en docs/README.md)
+│   └── img/           Capturas
 ├── scripts/
 │   ├── bin/           Scripts tal como corren en el servidor (sanitizados)
 │   ├── systemd/       Unidades .service y .timer
@@ -152,7 +177,7 @@ argos-homelab/
 └── LICENSE
 ```
 
-Los scripts están **sanitizados**: la ruta de la bóveda, las carpetas de Drive, el usuario, los ramos y las credenciales se cambiaron por marcadores `<ASÍ>`. No es un instalador; es la referencia de cómo está montado el sistema.
+Los scripts están **sanitizados**: la ruta de la bóveda, las carpetas de Drive, el usuario, los ramos y las credenciales se cambiaron por marcadores `<ASÍ>`. No es un instalador; es la referencia de cómo está montado el sistema. Para montar el tuyo, sigue [docs/00-replicar.md](docs/00-replicar.md).
 
 ## Licencia
 
