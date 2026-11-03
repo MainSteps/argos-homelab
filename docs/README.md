@@ -4,6 +4,7 @@ Un documento por subsistema, en el orden en que fluyen los datos.
 
 | # | Subsistema | Resumen |
 |---|---|---|
+| 0 | [Cómo montar el tuyo](00-replicar.md) | Requisitos, instalación y verificación |
 | 1 | [Bandeja](01-bandeja.md) | Puente Drive → ArgOS y clasificación automática (reglas + qwen3:4b) |
 | 2 | [Estudio](02-estudio.md) | Material PDF/Office → notas Markdown, con OCR |
 | 3 | [IA local](03-ia-local.md) | Ollama, modelos y la herramienta `argos-ia` |
