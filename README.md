@@ -3,6 +3,7 @@
 <p align="center"><b>Un mini PC de 35 W y sin GPU que ordena, convierte, transcribe e indexa toda mi vida académica con IA local.</b></p>
 
 <p align="center">
+  <a href="https://github.com/MainSteps/argos-homelab/actions/workflows/lint.yml"><img alt="CI" src="https://github.com/MainSteps/argos-homelab/actions/workflows/lint.yml/badge.svg"></a>
   <img alt="Ubuntu 26.04" src="https://img.shields.io/badge/Ubuntu-26.04_LTS-E95420?logo=ubuntu&logoColor=white">
   <img alt="Python 3.14" src="https://img.shields.io/badge/Python-3.14-3776AB?logo=python&logoColor=white">
   <img alt="Ollama" src="https://img.shields.io/badge/Ollama-qwen3:4b_·_bge--m3-000000?logo=ollama&logoColor=white">
